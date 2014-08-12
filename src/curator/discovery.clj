@@ -1,6 +1,7 @@
 (ns ^{:doc "Namespace for service discovery"} curator.discovery
     (:require [clojure.edn :as edn]
-              [curator.framework :refer (time-units)])
+              [curator.framework :refer (time-units)]
+              [clojure.string :as s])
     (:import [org.apache.curator.x.discovery ServiceDiscovery ServiceDiscoveryBuilder ServiceInstance ServiceType UriSpec ProviderStrategy DownInstancePolicy ServiceProvider ServiceCache]
              [org.apache.curator.x.discovery.details InstanceSerializer JsonInstanceSerializer InstanceProvider]
              [org.apache.curator.x.discovery.strategies RandomStrategy RoundRobinStrategy StickyStrategy]
@@ -19,22 +20,24 @@
 
 (defn uri-spec*
   "Creates a templated UriSpec from a string format.
-   Example: e.g. \"{scheme}://foo.com:{port}\"
-   Substitutions can include: scheme, name, id, address,
-   port, ssl-port, registration-time-utc, service-type"
+  Example: e.g. \"{scheme}://foo.com:{port}\"
+  Substitutions can include: scheme, name, id, address,
+  port, ssl-port, registration-time-utc, service-type"
   [s]
   (UriSpec. s))
 
-(defn service-instance
-  "name: my-service
-   uri-spec: \"{scheme}://foo.com:{port}\"
-   port: 1234
-   payload is serialized using json, only supports strings for now"
-  [name uri-spec port & {:keys [id address ssl-port service-type payload]}]
+(defn new-instance
+  "Create a new service instance.
+  name: my-service
+  uri-spec: \"{scheme}://foo.com:{port}\"
+  port: 1234
+  payload is serialized using json, only supports strings for now"
+  [name uri-spec & {:keys [port id address ssl-port service-type payload]}]
   {:pre [(or (nil? payload) (string? payload))]}
   (let [service-types {:dynamic   ServiceType/DYNAMIC
                        :static    ServiceType/STATIC
-                       :permanent ServiceType/PERMANENT}]
+                       :permanent ServiceType/PERMANENT}
+        port (if port port (Integer/parseInt (last (s/split uri-spec #":"))))]
     (-> (dotonn (ServiceInstance/builder)
                 (.payload payload)
                 (.name name)
@@ -52,25 +55,23 @@
 (defn json-serializer []
   (JsonInstanceSerializer. String))
 
-(defn service-discovery
-  [curator-framework service-instance & {:keys [base-path serializer payload-class]
-                                         :or   {base-path     "/foo"
-                                                payload-class String
-                                                serializer    (json-serializer)}}]
+(defn discovery
+  [curator-framework & {:keys [base-path serializer payload-class instance]
+                        :or   {base-path     "/foo"
+                               payload-class String
+                               serializer    (json-serializer)}}]
   {:pre [(.startsWith base-path "/")]}
   (-> (dotonn (ServiceDiscoveryBuilder/builder payload-class)
               (.client curator-framework)
               (.basePath base-path)
               (.serializer (json-serializer))
-              (.thisInstance service-instance))
+              (when instance (.thisInstance instance)))
       (.build)))
 
 (defn services
   "Returns the names of the services registered."
   [service-discovery]
   (.queryForNames service-discovery))
-
-
 
 (defn random-strategy
   []
@@ -84,14 +85,13 @@
   [^ProviderStrategy strategy]
   (StickyStrategy. strategy))
 
-
 (defn down-instance-policy
   ([] (down-instance-policy 30 :seconds 2))
   ([timeout timeout-unit error-threshold]
      {:pre [(some time-units [timeout-unit])]}
      (DownInstancePolicy. timeout (time-units timeout-unit) error-threshold)))
 
-(defn service-provider
+(defn provider
   "Creates a service provider for a named service s."
   [service-discovery s & {:keys [strategy down-instance-policy]
                           :or   {strategy             (random-strategy)
@@ -104,7 +104,7 @@
 
 (defn service-cache
   "Creates a service cache (rather than reading ZooKeeper each time) for
-   the service named s"
+  the service named s"
   [service-discovery s]
   (-> (.serviceCacheBuilder service-discovery)
       ( .name s)
@@ -112,8 +112,8 @@
 
 (defn note-error
   "Clients should use this to indicate a problem when trying to
-   connect to a service instance. The instance may be marked as down
-   depending on the service provider's down instance policy."
+  connect to a service instance. The instance may be marked as down
+  depending on the service provider's down instance policy."
   [^ServiceProvider service-provider ^ServiceInstance instance]
   (.noteError service-provider instance))
 
@@ -124,3 +124,13 @@
 (defmulti instance (fn [x & args] (.getClass x)))
 (defmethod instance ServiceProvider [provider] (.getInstance provider))
 (defmethod instance ServiceCache [cache ^ProviderStrategy strategy] (.getInstance strategy cache))
+
+(defn register
+  "Register/re-register a service"
+  [discovery service]
+  (.registerService discovery service))
+
+(defn unregister
+  "Unregister/remove a service"
+  [discovery service]
+  (.unregisterService discovery service))
