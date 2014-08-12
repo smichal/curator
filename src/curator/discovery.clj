@@ -102,7 +102,7 @@
         (.providerStrategy strategy))
       (.build)))
 
-(defn service-cache
+(defn cache
   "Creates a service cache (rather than reading ZooKeeper each time) for
   the service named s"
   [service-discovery s]
