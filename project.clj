@@ -1,4 +1,4 @@
-(defproject tiensonqin/curator "0.0.2"
+(defproject tiensonqin/curator "0.0.3"
   :description "Clojurified Apache Curator"
   :url "https://github.com/tiensonqin/curator"
   :license {:name "Eclipse Public License"
