@@ -37,7 +37,8 @@
   (let [service-types {:dynamic   ServiceType/DYNAMIC
                        :static    ServiceType/STATIC
                        :permanent ServiceType/PERMANENT}
-        port (if port port (Integer/parseInt (last (s/split uri-spec #":"))))]
+        port (if port port (Integer/parseInt (last (s/split uri-spec #":"))))
+        address (if address address (re-find #"[\d.]+" uri-spec))]
     (-> (dotonn (ServiceInstance/builder)
                 (.payload payload)
                 (.name name)
