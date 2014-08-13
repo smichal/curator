@@ -135,3 +135,8 @@
   "Unregister/remove a service"
   [discovery service]
   (.unregisterService discovery service))
+
+(defn update
+  "Update a service"
+  [discovery service]
+  (.updateService discovery service))
