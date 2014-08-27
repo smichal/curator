@@ -62,12 +62,12 @@
                                payload-class String
                                serializer    (json-serializer)}}]
   {:pre [(.startsWith base-path "/")]}
-  (-> (dotonn (ServiceDiscoveryBuilder/builder payload-class)
+  (cond-> (dotonn (ServiceDiscoveryBuilder/builder payload-class)
               (.client curator-framework)
               (.basePath base-path)
-              (.serializer (json-serializer))
-              (when instance (.thisInstance instance)))
-      (.build)))
+              (.serializer (json-serializer)))
+          instance (.thisInstance instance)
+          true (.build)))
 
 (defn services
   "Returns the names of the services registered."
